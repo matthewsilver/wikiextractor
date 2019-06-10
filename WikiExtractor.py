@@ -539,12 +539,13 @@ class Extractor(object):
     """
     An extraction task on a article.
     """
-    def __init__(self, id, revid, title, lines):
+    def __init__(self, id, revid, title, lines, catSet=None):
         """
         :param id: id of page.
         :param title: tutle of page.
         :param lines: a list of lines.
         """
+        self.catSet = catSet
         self.id = id
         self.revid = revid
         self.title = title
@@ -564,10 +565,11 @@ class Extractor(object):
         url = get_url(self.id)
         if options.write_json:
             json_data = {
+                'text': "\n".join(text),
                 'id': self.id,
                 'url': url,
                 'title': self.title,
-                'text': "\n".join(text)
+                'categories': list(self.catSet)
             }
             if options.print_revision:
                 json_data['revid'] = self.revid
@@ -2976,7 +2978,7 @@ def process_dump(input_file, template_file, out_file, file_size, file_compress,
                     delay += 10
             if delay:
                 logging.info('Delay %ds', delay)
-            job = (id, revid, title, page, page_num)
+            job = (id, revid, title, page, page_num, catSet)
             jobs_queue.put(job) # goes to any available extract_process
             page_num += 1
         page = None             # free memory
@@ -3024,9 +3026,9 @@ def extract_process(opts, i, jobs_queue, output_queue):
     while True:
         job = jobs_queue.get()  # job is (id, title, page, page_num)
         if job:
-            id, revid, title, page, page_num = job
+            id, revid, title, page, page_num, catSet = job
             try:
-                e = Extractor(*job[:4]) # (id, revid, title, page)
+                e = Extractor(job[0], job[1], job[2], job[3], job[5]) # (id, revid, title, page)
                 page = None              # free memory
                 e.extract(out)
                 text = out.getvalue()
@@ -3244,7 +3246,7 @@ def main():
         file = fileinput.FileInput(input_file, openhook=fileinput.hook_compressed)
         for page_data in pages_from(file):
             id, revid, title, ns,catSet, page = page_data
-            Extractor(id, revid, title, page).extract(sys.stdout)
+            Extractor(id, revid, title, page, catSet).extract(sys.stdout)
         file.close()
         return
 
